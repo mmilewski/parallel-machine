@@ -21,7 +21,7 @@ public class ParallelMachineExample {
 
         // configure machine which will execute tasks in parallel.
         ParallelMachine<ItemDescription, FetchedData> pm = new ParallelMachine<>(numOfParallelExecutors);
-        pm.setProcessor(item -> FetchedData.fetch(item.stringDescription));
+        pm.setProcessor(item -> FetchedData.fetchFrom(item.stringDescription));
         pm.setCallbacks(
             (item, result) -> {
                 println("item was processed and is ready for you to use. item: " + item.stringDescription.substring(0, 10));
@@ -53,7 +53,7 @@ public class ParallelMachineExample {
     }
 
     private static class FetchedData {
-        static FetchedData fetch(String dataToConstructRequest) {
+        static FetchedData fetchFrom(String dataToConstructRequest) {
             // call a service... and return with results
             return new FetchedData();
         }
