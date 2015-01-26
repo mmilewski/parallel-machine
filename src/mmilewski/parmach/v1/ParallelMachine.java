@@ -20,7 +20,7 @@ import static java.lang.Math.min;
  * Consumes stream of items. Reads a batch of items, processes them in parallel, and calls client back
  * with one results one-by-one.
  *
- * Processes 150MB file on 4 cores in 2 seconds, which is a good trade-off I believe.
+ * Processes 150MB file on 4 cores in 2 seconds (with 20 executor threads), which is a good trade-off I believe.
  *
  * Requires Java 8
  */
@@ -57,7 +57,7 @@ public class ParallelMachine<ItemT, ResultT> {
     }
 
     private class Task implements Callable<TaskResult> {
-        private ItemT item;
+        private final ItemT item;
 
         public Task(ItemT item) {
             this.item = item;
@@ -87,15 +87,20 @@ public class ParallelMachine<ItemT, ResultT> {
             UnmodifiableIterator<List<ItemT>> batchesIterator = partition(itemsIt, maxNumOfItemsInBatch);
             boolean shouldAbort = false;
             while (batchesIterator.hasNext() && !shouldAbort) {
-                List<ItemT> batchOfLines = batchesIterator.next();
-                shouldAbort = processBatch(es, executor, batchOfLines);
+                shouldAbort = processBatch(executor, batchesIterator.next());
+                if (shouldAbort) {
+                    es.shutdownNow();
+                }
             }
         } finally {
-            es.shutdown();
+            if (!es.isShutdown()) {
+                es.shutdown();
+            }
+            // no need to await termination because processBatch() waits for all tasks to complete before it returns.
         }
     }
 
-    private boolean processBatch(ExecutorService es, ExecutorCompletionService<TaskResult> executor, List<ItemT> batchOfLines) throws InterruptedException {
+    private boolean processBatch(ExecutorCompletionService<TaskResult> executor, List<ItemT> batchOfLines) throws InterruptedException {
         // submit all items in this batch to executor
         batchOfLines.forEach(item -> executor.submit(new Task(item)));
         // wait for all tasks to execute
@@ -110,7 +115,6 @@ public class ParallelMachine<ItemT, ResultT> {
                     case IGNORE:
                         break;
                     case ABORT_EVERYTHING:
-                        es.shutdownNow();
                         return true;
                 }
             }
